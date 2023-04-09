@@ -50,8 +50,8 @@ val_data = data[n:]
 
 model_params = TOKEN_MODEL_PARAMS
 model_params['vocab_size'] = vocab_size
-model_params['encoder'] = encode
-model_params['decoder'] = decode
+model_params['encode'] = encode
+model_params['decode'] = decode
 
 model = Writer(**model_params)
 model.to(DEVICE)

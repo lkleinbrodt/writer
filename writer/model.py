@@ -147,7 +147,7 @@ class Writer(nn.Module):
 
             self.model_params['vocabulary'] = vocabulary
         
-        elif encode & decode:
+        elif (encode is not None) & (decode is not None):
             assert vocabulary is None, 'If passing encode+decode do not pass vocabulary'
             self.encode = encode
             self.decode = decode

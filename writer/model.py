@@ -146,6 +146,7 @@ class Writer(nn.Module):
             self.decode = decode 
 
             self.model_params['vocabulary'] = vocabulary
+            self.vocabulary = vocabulary
         
         elif (encode is not None) & (decode is not None):
             assert vocabulary is None, 'If passing encode+decode do not pass vocabulary'
@@ -154,6 +155,7 @@ class Writer(nn.Module):
 
             self.model_params['encode'] = self.encode
             self.model_params['decode'] = self.decode
+            self.vocabulary = None
         
         else:
             raise ValueError('Must pass either vocabulary or encode+decode')
@@ -221,16 +223,19 @@ class Writer(nn.Module):
         
         return idx
 
-    def write(self, context = None, max_new_tokens = 100):
+    def write(self, context = None, max_new_tokens = 100, return_tokens = True):
         self.eval()
-        if context is None:
+        if not context:
             context = torch.zeros((1,1), dtype = torch.long, device = DEVICE)
         else:
             context = torch.tensor(self.encode(context), device = DEVICE).reshape(1,-1)
         
         tokens = self.generate(context, max_new_tokens=max_new_tokens)[0].tolist() #first batch
         self.train()
-        return self.decode(tokens)
+        if return_tokens:
+            return self.decode(tokens), tokens
+        else: 
+            return self.decode(tokens)
 
 class EarlyStopper:
     def __init__(self, path = None, patience = 1, min_delta = 0.0):
@@ -269,7 +274,10 @@ def save_model_state(model: Writer, path: str):
     }, path)
 
 def init_from_path(path):
-    model_state = torch.load(path)
+    if DEVICE == 'cpu':
+        model_state = torch.load(path, map_location=torch.device('cpu'))
+    else:
+        model_state = torch.load(path)
     model = Writer(**model_state['model_params'])
     model.load_state_dict(model_state['model_state_dict'])
     model.to(DEVICE)

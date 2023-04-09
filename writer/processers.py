@@ -1,6 +1,7 @@
 import pandas as pd
 
 class Frost:
+    """https://www.kaggle.com/archanghosh/robert-frost-collection"""
     def __init__(self):
         self.in_path = '../data/robert_frost_collection.csv'
         self.out_path = '../data/clean_frost.txt'
@@ -22,4 +23,22 @@ class Frost:
             
 
         with open(self.out_path, 'w') as f:
-            f.write(x)'
+            f.write(x)
+
+class Tolkein:
+    def __init__(self, ):
+        """https://github.com/MokoSan/FSharpAdvent/tree/master/Data"""
+        pass
+    def process(self):
+        with open('../data/HobbitBook.txt', 'r') as f:
+            hobbit = f.read()
+
+        with open('../data/LotrBook.txt', 'r') as f:
+            lotr = f.read()
+
+        tolkein = hobbit + '\n\n' + lotr
+
+        with open('../data/clean_tolkein.txt', 'w') as f:
+            f.write(tolkein)
+
+        

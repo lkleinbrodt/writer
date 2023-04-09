@@ -4,8 +4,9 @@ import torch
 torch.manual_seed(94903)
 
 
-CORPUS_PATH = './data/clean_shakespeare.txt'
-MODEL_PATH = './data/writer_character.tar'
+CORPUS_PATH = './data/clean_frost.txt'
+MODEL_PATH = './data/frost.tar'
+PRETRAINED_PATH = './data/writer_character.tar'
 
 MAX_ITERS = 10_000
 BATCH_SIZE = 64
@@ -26,16 +27,29 @@ def main():
     chars = sorted(list(set(text)))
     vocab_size = len(chars)
 
+    if PRETRAINED_PATH:
+        #TODO: huge todo. better pretraining
+        model = init_from_path(PRETRAINED_PATH)
+        vocabulary = set(model.vocabulary)
+        if vocabulary != set(chars):
+            log('cleaning text')
+            #TODO: better vocab reconciliation
+            text = ''.join([x for x in text if x in vocabulary])
+        model.train()
+        chars = sorted(list(set(text)))
+        vocab_size = len(chars)
+    else:
+
+        model_params = CHARACTER_MODEL_PARAMS
+        model_params['vocab_size'] = vocab_size
+        model_params['vocabulary'] = chars
+
+        model = Writer(**model_params)
+        model.to(DEVICE)
+    
     print('Vocab Size: ', '{:,}'.format(vocab_size))
     print(chars)
-
-    model_params = CHARACTER_MODEL_PARAMS
-    model_params['vocab_size'] = vocab_size
-    model_params['vocabulary'] = chars
     
-    model = Writer(**model_params)
-    model.to(DEVICE)
-
     data = torch.tensor(model.encode(text), dtype = torch.long)
 
     train_val_split = .9
@@ -48,7 +62,7 @@ def main():
 
     optimizer = torch.optim.AdamW(model.parameters(), lr = LEARNING_RATE)
 
-    early_stopping = EarlyStopper(MODEL_PATH, patience = 1000, min_delta = .01)
+    early_stopping = EarlyStopper(MODEL_PATH, patience = 20, min_delta = .01)
 
     # history = pd.DataFrame
     for iter in range(MAX_ITERS):

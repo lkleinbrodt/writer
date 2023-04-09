@@ -4,14 +4,14 @@ import torch
 torch.manual_seed(94903)
 
 
-CORPUS_PATH = './sample_data/clean_shakespeare.txt'
-MODEL_PATH = './sample_data/writer_character.tar'
+CORPUS_PATH = './data/clean_shakespeare.txt'
+MODEL_PATH = './data/writer_character.tar'
 
-MAX_ITERS = 200
+MAX_ITERS = 10_000
 BATCH_SIZE = 64
 LEARNING_RATE = 3E-4
-EVAL_INTERVAL = 100
-EVAL_ITERS = 10
+EVAL_INTERVAL = 500
+EVAL_ITERS = 15
 
 ###
 assert '.tar' in MODEL_PATH

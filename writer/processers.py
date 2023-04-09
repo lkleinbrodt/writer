@@ -25,7 +25,7 @@ class Frost:
         with open(self.out_path, 'w') as f:
             f.write(x)
 
-class Tolkein:
+class Tolkien:
     def __init__(self, ):
         """https://github.com/MokoSan/FSharpAdvent/tree/master/Data"""
         pass
@@ -36,9 +36,9 @@ class Tolkein:
         with open('../data/LotrBook.txt', 'r') as f:
             lotr = f.read()
 
-        tolkein = hobbit + '\n\n' + lotr
+        tolkien = hobbit + '\n\n' + lotr
 
-        with open('../data/clean_tolkein.txt', 'w') as f:
-            f.write(tolkein)
+        with open('../data/clean_tolkien.txt', 'w') as f:
+            f.write(tolkien)
 
         

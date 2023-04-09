@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 import numpy as np
 
-from time import localtime, strftime
+from time import localtime, strftime, time
 
 def log(s):
     t = strftime('%H:%M:%S', localtime())
@@ -18,10 +18,10 @@ TOKEN_MODEL_PARAMS = {
 }
 
 CHARACTER_MODEL_PARAMS = {
-    'block_size': 24,
-    'n_embed': 64,
-    'n_head': 2,
-    'n_layer': 2,
+    'block_size': 256,
+    'n_embed': 384,
+    'n_head': 6,
+    'n_layer': 6,
     'dropout': .2
 }
 
@@ -42,9 +42,7 @@ class Head(nn.Module):
         self.key = nn.Linear(n_embed, head_size, bias = False)
         self.query = nn.Linear(n_embed, head_size, bias = False)
         self.value = nn.Linear(n_embed, head_size, bias = False)
-
         self.register_buffer('tril', torch.tril(torch.ones(block_size, block_size)))
-
         self.dropout = nn.Dropout(dropout)
     
     def forward(self, x):
@@ -53,7 +51,7 @@ class Head(nn.Module):
         k = self.key(x)
         q = self.query(x)
 
-        weights = q @ k.transpose(-2,-1) * (k.shape[-1] ** -.5)
+        weights = q @ k.transpose(-2,-1) * k.shape[-1] ** -.5
         weights = weights.masked_fill(self.tril[:T, :T] == 0, float('-inf'))
         weights = F.softmax(weights, dim = -1)
         weights = self.dropout(weights)
@@ -109,10 +107,10 @@ class Block(nn.Module):
         x = x + self.feed_forward(self.layer_norm2(x))
 
         return x
-
+    
 class Writer(nn.Module):
 
-    def __init__(self, vocab_size, n_embed, n_layer, n_head, block_size, dropout, encoder, decoder) -> None:
+    def __init__(self, vocab_size, n_embed, n_layer, n_head, block_size, dropout, encode = None, decode = None, vocabulary = None) -> None:
         super().__init__()
 
         self.vocab_size = vocab_size
@@ -121,8 +119,6 @@ class Writer(nn.Module):
         self.n_head = n_head
         self.block_size = block_size
         self.dropout = dropout
-        self.encoder = encoder
-        self.decoder = decoder
 
         self.model_params = {
             'vocab_size': vocab_size,
@@ -131,9 +127,38 @@ class Writer(nn.Module):
             'n_head': n_head,
             'block_size': block_size,
             'dropout': dropout,
-            'encoder': encoder,
-            'decoder': decoder,
         }
+
+        if vocabulary:
+            assert (encode is None) and (decode is None), 'If passing vocabulary do not pass encode or decode'
+            assert vocab_size == len(vocabulary), 'Given vocab size does not match given vocabulary'
+
+            s_to_i = {char: i for i,char in enumerate(vocabulary)}
+            i_to_s = {i: char for i,char in enumerate(vocabulary)}
+
+            def encode(s):
+                return [s_to_i[c] for c in s]
+
+            def decode(l):
+                return ''.join([i_to_s[i] for i in l])
+
+            self.encode = encode
+            self.decode = decode 
+
+            self.model_params['vocabulary'] = vocabulary
+        
+        elif encode & decode:
+            assert vocabulary is None, 'If passing encode+decode do not pass vocabulary'
+            self.encode = encode
+            self.decode = decode
+
+            self.model_params['encode'] = self.encode
+            self.model_params['decode'] = self.decode
+        
+        else:
+            raise ValueError('Must pass either vocabulary or encode+decode')
+        
+        
 
         self.token_embedding_table = nn.Embedding(vocab_size, n_embed)
         self.position_embedding_table = nn.Embedding(block_size, n_embed)
@@ -145,7 +170,6 @@ class Writer(nn.Module):
         self.apply(self._init_weights)
     
     def _init_weights(self, module):
-        #TODO: check this logic
         if isinstance(module, nn.Linear):
             torch.nn.init.normal_(module.weight, mean = 0.0, std = .02)
             if module.bias is not None:
@@ -181,7 +205,7 @@ class Writer(nn.Module):
     def generate(self, idx, max_new_tokens):
 
         for _ in range(max_new_tokens):
-            #cropt to last block
+            #crop to last block
             idx_cond = idx[:, -self.block_size:]
             #predict 
             logits, loss = self(idx_cond)
@@ -202,11 +226,11 @@ class Writer(nn.Module):
         if context is None:
             context = torch.zeros((1,1), dtype = torch.long, device = DEVICE)
         else:
-            context = torch.tensor(self.encoder(context), device = DEVICE).reshape(1,-1)
+            context = torch.tensor(self.encode(context), device = DEVICE).reshape(1,-1)
         
         tokens = self.generate(context, max_new_tokens=max_new_tokens)[0].tolist() #first batch
         self.train()
-        return self.decoder(tokens)
+        return self.decode(tokens)
 
 class EarlyStopper:
     def __init__(self, path = None, patience = 1, min_delta = 0.0):
@@ -232,7 +256,6 @@ class EarlyStopper:
 
 def get_batch(data, block_size, batch_size):
     ix = torch.randint(len(data) - block_size, (batch_size, ))
-
     x = torch.stack([data[i:i+block_size] for i in ix])
     y = torch.stack([data[i+1:i+block_size+1] for i in ix])
     x,y = x.to(DEVICE), y.to(DEVICE)
@@ -270,4 +293,5 @@ def estimate_loss(model, eval_iters, train_data, val_data, batch_size):
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
+
     return out

@@ -1,10 +1,11 @@
 from model import *
+import torch
 
 torch.manual_seed(94903)
 
 
-CORPUS_PATH = './data/clean_shakespeare.txt'
-MODEL_PATH = './data/writer_character.pt'
+CORPUS_PATH = './sample_data/clean_shakespeare.txt'
+MODEL_PATH = './sample_data/writer_character.tar'
 
 MAX_ITERS = 200
 BATCH_SIZE = 64
@@ -13,64 +14,64 @@ EVAL_INTERVAL = 100
 EVAL_ITERS = 10
 
 ###
-# assert '.tar' in MODEL_PATH
+assert '.tar' in MODEL_PATH
 
-with open(CORPUS_PATH, 'r') as f:
-    text = f.read()
+def main():
 
-print('Corpus Length: ', '{:,}'.format(len(text)))
+    with open(CORPUS_PATH, 'r') as f:
+        text = f.read()
 
-chars = sorted(list(set(text)))
-vocab_size = len(chars)
-print('Vocab Size: ', '{:,}'.format(vocab_size))
-print(chars)
+    print('Corpus Length: ', '{:,}'.format(len(text)))
 
-s_to_i = {char: i for i,char in enumerate(chars)}
-i_to_s = {i: char for i,char in enumerate(chars)}
+    chars = sorted(list(set(text)))
+    vocab_size = len(chars)
 
-def encode(s):
-    return [s_to_i[c] for c in s]
+    print('Vocab Size: ', '{:,}'.format(vocab_size))
+    print(chars)
 
-def decode(l):
-    return ''.join([i_to_s[i] for i in l])
+    model_params = CHARACTER_MODEL_PARAMS
+    model_params['vocab_size'] = vocab_size
+    model_params['vocabulary'] = chars
+    
+    model = Writer(**model_params)
+    model.to(DEVICE)
 
-data = torch.tensor(encode(text), dtype = torch.long)
+    data = torch.tensor(model.encode(text), dtype = torch.long)
 
-train_val_split = .9
-n = int(train_val_split * len(data))
+    train_val_split = .9
+    n = int(train_val_split * len(data))
 
-train_data = data[:n]
-val_data = data[n:]
+    train_data = data[:n]
+    val_data = data[n:]
 
-model_params = CHARACTER_MODEL_PARAMS
-model_params['vocab_size'] = vocab_size
-model_params['encoder'] = encode
-model_params['decoder'] = decode
+    print('Model has ', sum(p.numel() for p in model.parameters())/1e6, ' million parameters')
 
-model = Writer(**model_params)
-model.to(DEVICE)
+    optimizer = torch.optim.AdamW(model.parameters(), lr = LEARNING_RATE)
 
-print('Model has ', sum(p.numel() for p in model.parameters())/1e6, ' million parameters')
+    early_stopping = EarlyStopper(MODEL_PATH, patience = 1000, min_delta = .01)
 
-optimizer = torch.optim.AdamW(model.parameters(), lr = LEARNING_RATE)
+    # history = pd.DataFrame
+    for iter in range(MAX_ITERS):
+        if (iter % EVAL_INTERVAL == 0) or (iter == MAX_ITERS - 1):
+            stime = time()
+            losses = estimate_loss(model, EVAL_INTERVAL, train_data, val_data, BATCH_SIZE)
+            elapsed = time() - stime
+            log(f"Step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f} (eval took {int(elapsed)} secs)")
+            if early_stopping.early_stop(losses['val'], model):
+                log('stopping early!')
+                break
+            # log(model.write(max_new_tokens=50))
 
-early_stopping = EarlyStopper(MODEL_PATH, patience = 1000, min_delta = .01)
+        x,y = get_batch(train_data, model.block_size, BATCH_SIZE)
 
-# history = pd.DataFrame
-for iter in range(MAX_ITERS):
-    if (iter % EVAL_INTERVAL == 0) or (iter == MAX_ITERS - 1):
-        losses = estimate_loss(model, EVAL_INTERVAL, train_data, val_data, BATCH_SIZE)
-        log(f"Step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
-        if early_stopping.early_stop(losses['val'], model):
-            log('stopping early!')
-            break
-        # log(model.write(max_new_tokens=50))
+        logits, loss = model(x,y)
+        optimizer.zero_grad(set_to_none = True)
+        loss.backward()
+        optimizer.step()
 
-    x,y = get_batch(train_data, model.block_size, BATCH_SIZE)
+    save_model_state(model, MODEL_PATH.replace('.tar', '_trained.tar'))
 
-    logits, loss = model(x,y)
-    optimizer.zero_grad(set_to_none = True)
-    loss.backward()
-    optimizer.step()
-
-save_model_state(model, MODEL_PATH.replace('.pt', '_trained.pt'))
+if __name__ == '__main__':
+    log('---START---')
+    main()
+    log('---END---')

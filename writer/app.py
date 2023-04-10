@@ -24,41 +24,51 @@ author_dict = {
         'model': './data/frost.tar',
         'starter': '\n\n'
     },
-    'JRR Tolkein': {
+    'JRR Tolkien': {
         'text': './data/clean_tolkein.txt',
-        'model': None,
-        'starter': '< The '
+        'model': './data/tolkien.tar',
+        'starter': '>\n',
     }
 }
 
+def change_author():
+    st.session_state['output'] = ''
+
 author = st.selectbox(
     'Choose your author:',
-    options = author_dict.keys()
+    options = author_dict.keys(),
+    on_change=change_author
 )
 
 @st.cache_resource(show_spinner=False)
 def load_model(author):
 
-    author_info = author_dict[author]
-
-    model = init_from_path(author_info['model'])
+    model = init_from_path(author_dict[author]['model'])
     model.eval()
-    with open(author_info['text'], 'r') as f:
-        txt = f.read()
-    return model, txt
-writer, text = load_model(author)
+    # with open(author_info['text'], 'r') as f:
+    #     txt = f.read()
+    return model
+writer = load_model(author)
 
 generate = st.checkbox('Write!')
 
 output_box = st.empty()
-context = torch.tensor(writer.encode('By William Shakespeare'), device = DEVICE).reshape(1,-1)
+context = torch.tensor(writer.encode(author_dict[author]['starter']), device = DEVICE).reshape(1,-1)
 MAX_NEW_TOKENS = 1
+
+#TODO: tolkien does long lines, need a way to break that.
+# text supports \n but does not wrap text. markdown and write wrap text but dont support \n
+if author == 'JRR Tolkien':
+    display = lambda x: output_box.write(x)
+else:
+    display = lambda x: output_box.text(x)
 
 while generate:
     output = st.session_state['output']
-    output_box.text(output)
+    display(output)
     # new_context = writer.generate(context, max_new_tokens=10)[0]
     # new_output = writer.decode(new_context.tolist())
+    
     context = writer.generate(context.reshape(1,-1), max_new_tokens=MAX_NEW_TOKENS)[0]#.reshape(1,-1)
     new_output = writer.decode(context.tolist()) #better than just assigning output? this allows us to crop output and context differently?
     output += new_output[-MAX_NEW_TOKENS:]
@@ -76,4 +86,4 @@ while generate:
     st.session_state['output'] = output
     # print(new_output)
 
-output_box.text(st.session_state['output'])
+display(st.session_state['output'])

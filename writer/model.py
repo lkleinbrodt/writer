@@ -1,7 +1,9 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+from s3 import *
 import numpy as np
+from io import BytesIO
 
 from time import localtime, strftime, time
 
@@ -282,6 +284,12 @@ def init_from_path(path):
     model.load_state_dict(model_state['model_state_dict'])
     model.to(DEVICE)
     return model
+
+def init_from_s3(s3_path):
+    s3_object = s3.get_object(Bucket = S3_BUCKET, Key = s3_path)
+    contents = s3_object['Body'].read()
+    obj = BytesIO(contents)
+    return init_from_path(obj)
 
 @torch.no_grad()
 def estimate_loss(model, eval_iters, train_data, val_data, batch_size):

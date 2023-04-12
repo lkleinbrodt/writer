@@ -46,7 +46,7 @@ if st.session_state['context'] == '':
     st.session_state['context'] = torch.tensor(writer.encode(AUTHOR_DICT[author]['starter']), device = DEVICE).reshape(1,-1)
 
 output_box = st.empty()
-MAX_NEW_TOKENS = 1
+MAX_NEW_TOKENS = 5 #streamlit cloud is able to handle 5 pretty seamlessly
 
 #TODO: tolkien does long lines, need a way to break that.
 # text supports \n but does not wrap text. markdown and write wrap text but dont support \n
@@ -58,6 +58,7 @@ else:
 while generate:
     output = st.session_state['output']
     context = st.session_state['context']
+    output_box.empty()
     display(output)
     # new_context = writer.generate(context, max_new_tokens=10)[0]
     # new_output = writer.decode(new_context.tolist())
@@ -74,8 +75,6 @@ while generate:
         output = output[-750:]
     if len(context) > writer.block_size:
         context = context[-writer.block_size:]
-
-    output_box.empty()
     st.session_state['output'] = output
     st.session_state['context'] = context
     # print(new_output)

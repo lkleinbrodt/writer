@@ -9,10 +9,10 @@ AUTHOR_DICT = {
         's3_model_path': 'models/shakespeare.tar', 
         'starter': 'By William Shakespeare'
     },
-    'Robert Frost': {
-        'text': 'clean_frost.txt', 
-        's3_model_path': 'models/frost.tar',
-        'starter': '\n\n'
-    },
+    # 'Robert Frost': {
+    #     'text': 'clean_frost.txt', 
+    #     's3_model_path': 'models/frost.tar',
+    #     'starter': '\n\n'
+    # },
     
 }

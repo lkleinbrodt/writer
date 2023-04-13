@@ -3,6 +3,7 @@ from model import *
 import re
 from datetime import datetime
 from config import *
+from random import randint, sample
 
 _, c = st.columns([5, 1])
 link = '[See the code](https://github.com/lkleinbrodt/writer/blob/main/writer/model.py)'
@@ -17,13 +18,29 @@ if 'context' not in st.session_state:
 if 'model_dict' not in st.session_state:
     st.session_state['model_dict'] = {}
 
+if 'text_dict' not in st.session_state:
+    st.session_state['text_dict'] = {}
+
+if 'starting_index_dict' not in st.session_state:
+    st.session_state['starting_index_dict'] = {}
+
+if 'generating' not in st.session_state:
+    st.session_state['generating'] = False
+
+if 'starting_text' not in st.session_state:
+    st.session_state['starting_text'] = ''
+
+if 'first_run' not in st.session_state:
+    st.session_state['first_run'] = True
+
 
 def change_author():
     author = st.session_state['author']
     log(f'changing author to: {author}')
-    writer = st.session_state['writer']
     st.session_state['output'] = ''
     st.session_state['context'] = ''
+    st.session_state['starting_text'] = ''
+    st.session_state['first_run'] = True
 
 author = st.selectbox(
     'Choose your author:',
@@ -36,14 +53,58 @@ if author not in st.session_state['model_dict']:
     model = init_from_s3(AUTHOR_DICT[author]['s3_model_path'])
     model.eval()
     st.session_state['model_dict'][author] = model
+    with open(AUTHOR_DICT[author]['text'], 'r') as f:
+        text = f.read()
+
+    valid_starting_indices = []
+    if author in ['William Shakespeare', 'Robert Frost']:
+        sep = ' '
+    else:
+        sep = '\n'
+    
+    valid_starting_indices = [i for i,x in enumerate(text) if x == sep]
+    assert len(valid_starting_indices) > 0
+    
+    st.session_state['text_dict'][author] = text
+    st.session_state['starting_index_dict'][author] = valid_starting_indices
 
 writer = st.session_state['model_dict'][author]
+text = st.session_state['text_dict'][author]
+
 st.session_state['writer'] = writer
+st.session_state['text'] = text
 
-generate = st.checkbox('Write!')
+if st.session_state['starting_text'] == '':
+    # starter_text = AUTHOR_DICT[author]['starter']
+    starting_index = sample(st.session_state['starting_index_dict'][author], 1)[0] + 1
+    starting_text = ' '.join(text[starting_index:starting_index+100].split()[:-1])
+    st.session_state['starting_text'] = starting_text
+    st.session_state['output'] = starting_text
+    st.session_state['context'] = torch.tensor(writer.encode(starting_text), device = DEVICE).reshape(1,-1)
 
-if st.session_state['context'] == '':
-    st.session_state['context'] = torch.tensor(writer.encode(AUTHOR_DICT[author]['starter']), device = DEVICE).reshape(1,-1)
+def set_context():
+    starting_text = st.session_state['starting_text']
+    st.session_state['context'] = torch.tensor(writer.encode(starting_text), device = DEVICE).reshape(1,-1)
+    st.session_state['output'] = starting_text
+
+starting_text = st.text_area(
+    'Enter a prompt:',
+    # value = st.session_state['starting_text'],
+    key = 'starting_text',
+    on_change = set_context
+)
+
+
+def toggle_generate():
+    st.session_state['generating'] = not st.session_state['generating']
+    st.session_state['first_run'] = False
+
+if not st.session_state['generating']:
+    label = 'Start Writing!'
+else:
+    label = 'Stop Writing!'
+
+toggle = st.button(label, on_click = toggle_generate)
 
 output_box = st.empty()
 MAX_NEW_TOKENS = 5 #streamlit cloud is able to handle 5 pretty seamlessly
@@ -55,7 +116,7 @@ if author == 'JRR Tolkien':
 else:
     display = lambda x: output_box.text(x)
 
-while generate:
+while st.session_state['generating']:
     output = st.session_state['output']
     context = st.session_state['context']
     output_box.empty()
@@ -79,4 +140,5 @@ while generate:
     st.session_state['context'] = context
     # print(new_output)
 
-display(st.session_state['output'])
+if not st.session_state['first_run']:
+    display(st.session_state['output'])

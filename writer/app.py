@@ -53,9 +53,9 @@ if author not in st.session_state['model_dict']:
     model = init_from_s3(AUTHOR_DICT[author]['s3_model_path'])
     model.eval()
     st.session_state['model_dict'][author] = model
-    with open(AUTHOR_DICT[author]['text'], 'r') as f:
-        text = f.read()
 
+    text = load_text_from_s3(AUTHOR_DICT[author]['text'])
+    
     valid_starting_indices = []
     if author in ['William Shakespeare', 'Robert Frost']:
         sep = ' '

@@ -291,6 +291,12 @@ def init_from_s3(s3_path):
     obj = BytesIO(contents)
     return init_from_path(obj)
 
+def load_text_from_s3(text_name):
+    s3_object = s3.get_object(Bucket = S3_BUCKET, Key = f'texts/{text_name}')
+    contents = s3_object['Body'].read()
+    text = contents.decode('utf-8')
+    return text
+
 @torch.no_grad()
 def estimate_loss(model, eval_iters, train_data, val_data, batch_size):
     out = {}
